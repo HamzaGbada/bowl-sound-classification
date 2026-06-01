@@ -1,0 +1,87 @@
+services:
+  # Jupyter notebook server for EDA and report notebooks
+  notebooks:
+    build:
+      context: .
+      target: notebooks
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Train baseline models (Phase 2)
+  training:
+    build:
+      context: .
+      target: training
+    volumes:
+      - ./experiments:/app/experiments
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Run ablation study (Phase 4)
+  ablation:
+    build:
+      context: .
+      target: ablation
+    volumes:
+      - ./experiments:/app/experiments
+      - ./results:/app/results
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Streamlit web app (Phase 5)
+  app:
+    build:
+      context: .
+      target: app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./experiments:/app/experiments
+      - ./results:/app/results
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # CLI inference — pass wav file via volume
+  inference:
+    build:
+      context: .
+      target: inference
+    volumes:
+      - ./data:/app/data
+      - ./experiments:/app/experiments
+      - ./results:/app/results
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
