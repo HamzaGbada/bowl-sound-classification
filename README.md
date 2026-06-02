@@ -119,6 +119,32 @@ docker compose run --rm inference data/23M74M.wav
 
 All services mount `data/`, `experiments/`, and `results/` as volumes for persistence.
 
+## Testing
+
+```bash
+# Install dev dependencies
+uv sync --group dev
+
+# Run all tests
+uv run pytest
+
+# Run with coverage report
+uv run pytest --cov=src --cov=app --cov-report=term-missing
+```
+
+**149 tests** covering config, audio pipeline, preprocessing, models, dataset, and inference:
+
+| Test file | What it tests | Tests |
+|-----------|--------------|:-----:|
+| `test_config.py` | Constants, PreprocessingConfig dataclass, TrainingConfig, JSON roundtrips | 25 |
+| `test_audio.py` | set_seed, parse_labels, label normalisation, spectrogram shape/dtype/determinism | 29 |
+| `test_preprocessing.py` | Bandpass filter, RMS normalisation, augmentation, pipeline combinations | 34 |
+| `test_models.py` | Factory pattern, forward pass for all 3 models, output shapes, parameter counts | 28 |
+| `test_dataset.py` | Class weights, collate_fn, config integration | 18 |
+| `test_inference.py` | Detection merging (gap thresholds, confidence), detector init, detect() | 15 |
+
+CI runs automatically on push/PR via GitHub Actions (`.github/workflows/ci.yml`).
+
 ## Dependencies
 
 ```bash
