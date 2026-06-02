@@ -1,4 +1,5 @@
 """Signal preprocessing: bandpass filtering, RMS normalisation, and augmentation."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -6,8 +7,9 @@ import librosa
 from scipy.signal import butter, sosfilt
 
 
-def bandpass_filter(y: np.ndarray, sr: int, low_hz: float, high_hz: float,
-                    order: int = 4) -> np.ndarray:
+def bandpass_filter(
+    y: np.ndarray, sr: int, low_hz: float, high_hz: float, order: int = 4
+) -> np.ndarray:
     """4th-order Butterworth bandpass filter."""
     nyquist = sr / 2
     low = max(low_hz / nyquist, 1e-5)
@@ -18,16 +20,19 @@ def bandpass_filter(y: np.ndarray, sr: int, low_hz: float, high_hz: float,
 
 def rms_normalise(y: np.ndarray, target_rms: float = 0.1) -> np.ndarray:
     """Scale waveform to target RMS, clip to [-1, 1]."""
-    rms = np.sqrt(np.mean(y ** 2))
+    rms = np.sqrt(np.mean(y**2))
     if rms < 1e-8:
         return y
     y = y * (target_rms / rms)
     return np.clip(y, -1.0, 1.0).astype(np.float32)
 
 
-def augment_clip(y: np.ndarray, sr: int,
-                 methods: tuple[str, ...] = ("pitch", "stretch", "noise"),
-                 rng: np.random.Generator | None = None) -> list[np.ndarray]:
+def augment_clip(
+    y: np.ndarray,
+    sr: int,
+    methods: tuple[str, ...] = ("pitch", "stretch", "noise"),
+    rng: np.random.Generator | None = None,
+) -> list[np.ndarray]:
     """Return a list of augmented variants of *y*."""
     if rng is None:
         rng = np.random.default_rng()
@@ -42,13 +47,13 @@ def augment_clip(y: np.ndarray, sr: int,
         rate = rng.uniform(0.8, 1.2)
         y_stretch = librosa.effects.time_stretch(y, rate=float(rate))
         if len(y_stretch) > len(y):
-            y_stretch = y_stretch[:len(y)]
+            y_stretch = y_stretch[: len(y)]
         elif len(y_stretch) < len(y):
             y_stretch = np.pad(y_stretch, (0, len(y) - len(y_stretch)))
         variants.append(y_stretch.astype(np.float32))
 
     if "noise" in methods:
-        signal_power = np.mean(y ** 2)
+        signal_power = np.mean(y**2)
         snr_linear = 10 ** (20 / 10)
         noise_power = signal_power / snr_linear
         noise = rng.normal(0, np.sqrt(max(noise_power, 1e-10)), len(y))

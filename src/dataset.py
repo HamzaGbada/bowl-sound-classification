@@ -3,6 +3,7 @@
 Provides BowelSoundDataset, stratified splitting, class-weight computation,
 and optional preprocessing/augmentation through PreprocessingConfig.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -12,25 +13,40 @@ from sklearn.model_selection import train_test_split
 
 try:
     from src.config import (
-        SR, DATA_DIR, TARGET_CLASSES, CLASS_TO_IDX, SEED,
+        SR,
+        DATA_DIR,
+        TARGET_CLASSES,
+        CLASS_TO_IDX,
+        SEED,
         PreprocessingConfig,
     )
     from src.audio import (
-        load_audio_files, parse_labels, load_eda_summary, compute_mel_spectrogram,
+        load_audio_files,
+        parse_labels,
+        load_eda_summary,
+        compute_mel_spectrogram,
     )
     from src.preprocessing import apply_preprocessing_pipeline, augment_clip
 except ImportError:
     from config import (
-        SR, DATA_DIR, TARGET_CLASSES, CLASS_TO_IDX, SEED,
+        SR,
+        DATA_DIR,
+        TARGET_CLASSES,
+        CLASS_TO_IDX,
+        SEED,
         PreprocessingConfig,
     )
     from audio import (
-        load_audio_files, parse_labels, load_eda_summary, compute_mel_spectrogram,
+        load_audio_files,
+        parse_labels,
+        load_eda_summary,
+        compute_mel_spectrogram,
     )
     from preprocessing import apply_preprocessing_pipeline, augment_clip
 
 
 # ── Main dataset ──────────────────────────────────────────────────────
+
 
 class BowelSoundDataset(Dataset):
     """Bowel-sound event dataset with optional preprocessing.
@@ -46,7 +62,9 @@ class BowelSoundDataset(Dataset):
         split: str | None = None,
     ) -> None:
         summary = load_eda_summary()
-        self.clip_duration: float = clip_duration or summary["recommended_segment_duration_s"]
+        self.clip_duration: float = (
+            clip_duration or summary["recommended_segment_duration_s"]
+        )
 
         # Accept both dataclass and raw dict for backward compatibility
         if preprocessing_config is None:
@@ -136,6 +154,7 @@ class BowelSoundDataset(Dataset):
 
 # ── Split dataset with augmentation ───────────────────────────────────
 
+
 class _SplitDataset(Dataset):
     """Wraps a BowelSoundDataset, exposing only selected indices + augmented items."""
 
@@ -197,6 +216,7 @@ class _SplitDataset(Dataset):
 
 # ── Public API ────────────────────────────────────────────────────────
 
+
 def get_splits(
     dataset: BowelSoundDataset | None = None,
     preprocessing_config: PreprocessingConfig | dict | None = None,
@@ -215,11 +235,17 @@ def get_splits(
     indices = list(range(len(base.events)))
 
     train_idx, temp_idx = train_test_split(
-        indices, test_size=0.30, stratify=labels, random_state=SEED,
+        indices,
+        test_size=0.30,
+        stratify=labels,
+        random_state=SEED,
     )
     temp_labels = [labels[i] for i in temp_idx]
     val_idx, test_idx = train_test_split(
-        temp_idx, test_size=0.50, stratify=temp_labels, random_state=SEED,
+        temp_idx,
+        test_size=0.50,
+        stratify=temp_labels,
+        random_state=SEED,
     )
 
     if preprocessing_config is None:
@@ -230,7 +256,11 @@ def get_splits(
         preprocessing_config = PreprocessingConfig.from_dict(preprocessing_config)
 
     splits: dict[str, Dataset] = {}
-    for split_name, split_idx in [("train", train_idx), ("val", val_idx), ("test", test_idx)]:
+    for split_name, split_idx in [
+        ("train", train_idx),
+        ("val", val_idx),
+        ("test", test_idx),
+    ]:
         ds = BowelSoundDataset(
             clip_duration=clip_duration,
             preprocessing_config=preprocessing_config,
@@ -270,7 +300,9 @@ if __name__ == "__main__":
     print(f"Clip duration: {ds.clip_duration}s")
 
     train_ds, val_ds, test_ds = get_splits(dataset=ds)
-    print(f"Baseline split — Train: {len(train_ds)}, Val: {len(val_ds)}, Test: {len(test_ds)}")
+    print(
+        f"Baseline split — Train: {len(train_ds)}, Val: {len(val_ds)}, Test: {len(test_ds)}"
+    )
 
     weights = compute_class_weights(ds)
     print(f"Class weights: {dict(zip(TARGET_CLASSES, weights.tolist()))}")
@@ -279,7 +311,13 @@ if __name__ == "__main__":
     print(f"Spectrogram shape: {spec.shape}, Label: {label}, Meta: {meta}")
 
     print("\n--- Preprocessed + Augmented ---")
-    pp_config = PreprocessingConfig(use_bandpass=True, use_normalise=True, use_augmentation=True)
+    pp_config = PreprocessingConfig(
+        use_bandpass=True, use_normalise=True, use_augmentation=True
+    )
     train_pp, val_pp, test_pp = get_splits(preprocessing_config=pp_config)
-    print(f"Preprocessed split — Train: {len(train_pp)}, Val: {len(val_pp)}, Test: {len(test_pp)}")
-    print(f"Train class counts: {dict(zip(TARGET_CLASSES, np.bincount(train_pp.labels, minlength=3)))}")
+    print(
+        f"Preprocessed split — Train: {len(train_pp)}, Val: {len(val_pp)}, Test: {len(test_pp)}"
+    )
+    print(
+        f"Train class counts: {dict(zip(TARGET_CLASSES, np.bincount(train_pp.labels, minlength=3)))}"
+    )

@@ -1,4 +1,5 @@
 """Single source of truth for all project constants, paths, and configuration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,9 +31,11 @@ SEED: int = 42
 
 # ── Configuration dataclasses ─────────────────────────────────────────
 
+
 @dataclass
 class PreprocessingConfig:
     """Typed, validated preprocessing configuration."""
+
     use_bandpass: bool = False
     use_normalise: bool = False
     use_augmentation: bool = False
@@ -52,6 +55,7 @@ class PreprocessingConfig:
 @dataclass
 class TrainingConfig:
     """Training hyper-parameters."""
+
     model: str = "resnet_cnn"
     experiment: str = "baseline_cnn"
     epochs: int = 30

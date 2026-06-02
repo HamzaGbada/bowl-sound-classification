@@ -1,4 +1,5 @@
 """Tests for src/audio.py — spectrogram, parsing, seed utilities."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,12 +10,15 @@ import pytest
 import torch
 
 from src.audio import (
-    set_seed, parse_labels, load_eda_summary, compute_mel_spectrogram,
+    set_seed,
+    parse_labels,
+    load_eda_summary,
+    compute_mel_spectrogram,
 )
 from src.config import SR, SPEC_SIZE
 
-
 # ── set_seed ──────────────────────────────────────────────────────────
+
 
 class TestSetSeed:
     def test_deterministic_numpy(self):
@@ -42,6 +46,7 @@ class TestSetSeed:
 
 # ── parse_labels ──────────────────────────────────────────────────────
 
+
 class TestParseLabels:
     def test_basic_parsing(self, label_file: Path):
         events = parse_labels(label_file, "test_file")
@@ -51,7 +56,7 @@ class TestParseLabels:
     def test_label_normalisation(self, label_file: Path):
         events = parse_labels(label_file, "test_file")
         labels = [e["label"] for e in events]
-        assert "sb" not in labels   # mapped to b
+        assert "sb" not in labels  # mapped to b
         assert "sbs" not in labels  # mapped to b
         assert labels.count("b") == 3  # original b + sb + sbs
 
@@ -70,13 +75,16 @@ class TestParseLabels:
         events = parse_labels(label_file, "my_file")
         assert all(e["file_id"] == "my_file" for e in events)
 
-    @pytest.mark.parametrize("label,expected", [
-        ("b", "b"),
-        ("mb", "mb"),
-        ("h", "h"),
-        ("sb", "b"),
-        ("sbs", "b"),
-    ])
+    @pytest.mark.parametrize(
+        "label,expected",
+        [
+            ("b", "b"),
+            ("mb", "mb"),
+            ("h", "h"),
+            ("sb", "b"),
+            ("sbs", "b"),
+        ],
+    )
     def test_individual_label_mapping(self, tmp_path: Path, label: str, expected: str):
         f = tmp_path / "test.txt"
         f.write_text(f"1.0\t2.0\t{label}\n")
@@ -93,6 +101,7 @@ class TestParseLabels:
 
 # ── load_eda_summary ─────────────────────────────────────────────────
 
+
 class TestLoadEdaSummary:
     def test_loads_json(self, eda_summary_file: Path):
         summary = load_eda_summary(eda_summary_file.parent)
@@ -108,6 +117,7 @@ class TestLoadEdaSummary:
 
 
 # ── compute_mel_spectrogram ──────────────────────────────────────────
+
 
 class TestComputeMelSpectrogram:
     def test_output_shape(self, sine_wave: np.ndarray):
@@ -135,7 +145,9 @@ class TestComputeMelSpectrogram:
         spec = compute_mel_spectrogram(silence)
         assert torch.isfinite(spec).all()
 
-    def test_impulse_vs_sine_differ(self, sine_wave: np.ndarray, impulse_signal: np.ndarray):
+    def test_impulse_vs_sine_differ(
+        self, sine_wave: np.ndarray, impulse_signal: np.ndarray
+    ):
         spec_sine = compute_mel_spectrogram(sine_wave)
         spec_impulse = compute_mel_spectrogram(impulse_signal)
         assert not torch.equal(spec_sine, spec_impulse)

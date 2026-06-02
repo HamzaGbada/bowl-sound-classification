@@ -1,4 +1,5 @@
 """Tests for app/inference.py — BowelSoundDetector and detection merging."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,8 +14,8 @@ from app.inference import BowelSoundDetector
 from src.config import TARGET_CLASSES
 from tests.conftest import make_mock_model
 
-
 # ── _merge_detections (pure logic, no mocking needed) ─────────────────
+
 
 class TestMergeDetections:
     def test_empty_input(self):
@@ -45,17 +46,25 @@ class TestMergeDetections:
         merged = BowelSoundDetector._merge_detections(dets)
         assert len(merged) == 2
 
-    @pytest.mark.parametrize("gap,expected_count", [
-        (0.0, 1),    # no gap → merge
-        (0.1, 1),    # small gap → merge
-        (0.19, 1),   # just below threshold → merge
-        (0.3, 2),    # above threshold → separate
-        (1.0, 2),    # large gap → separate
-    ])
+    @pytest.mark.parametrize(
+        "gap,expected_count",
+        [
+            (0.0, 1),  # no gap → merge
+            (0.1, 1),  # small gap → merge
+            (0.19, 1),  # just below threshold → merge
+            (0.3, 2),  # above threshold → separate
+            (1.0, 2),  # large gap → separate
+        ],
+    )
     def test_gap_threshold(self, gap: float, expected_count: int):
         dets = [
             {"start_s": 1.0, "end_s": 2.0, "class_label": "b", "confidence": 0.9},
-            {"start_s": 2.0 + gap, "end_s": 3.0 + gap, "class_label": "b", "confidence": 0.8},
+            {
+                "start_s": 2.0 + gap,
+                "end_s": 3.0 + gap,
+                "class_label": "b",
+                "confidence": 0.8,
+            },
         ]
         merged = BowelSoundDetector._merge_detections(dets, max_gap=0.2)
         assert len(merged) == expected_count
@@ -73,9 +82,24 @@ class TestMergeDetections:
     def test_mixed_merge_and_separate(self):
         dets = [
             {"start_s": 0.0, "end_s": 1.0, "class_label": "b", "confidence": 0.9},
-            {"start_s": 1.0, "end_s": 2.0, "class_label": "b", "confidence": 0.8},  # merge with prev
-            {"start_s": 5.0, "end_s": 6.0, "class_label": "mb", "confidence": 0.7},  # new (diff class + gap)
-            {"start_s": 6.0, "end_s": 7.0, "class_label": "mb", "confidence": 0.85}, # merge with prev
+            {
+                "start_s": 1.0,
+                "end_s": 2.0,
+                "class_label": "b",
+                "confidence": 0.8,
+            },  # merge with prev
+            {
+                "start_s": 5.0,
+                "end_s": 6.0,
+                "class_label": "mb",
+                "confidence": 0.7,
+            },  # new (diff class + gap)
+            {
+                "start_s": 6.0,
+                "end_s": 7.0,
+                "class_label": "mb",
+                "confidence": 0.85,
+            },  # merge with prev
         ]
         merged = BowelSoundDetector._merge_detections(dets)
         assert len(merged) == 2
@@ -95,6 +119,7 @@ class TestMergeDetections:
 
 
 # ── BowelSoundDetector initialisation ─────────────────────────────────
+
 
 class TestDetectorInit:
     @patch("app.inference.get_model")
@@ -131,6 +156,7 @@ class TestDetectorInit:
 
 
 # ── detect() ──────────────────────────────────────────────────────────
+
 
 class TestDetect:
     @patch("app.inference.get_model")

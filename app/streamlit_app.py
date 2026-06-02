@@ -1,4 +1,5 @@
 """Streamlit app for bowel sound detection and classification."""
+
 from __future__ import annotations
 
 import json
@@ -33,6 +34,7 @@ _SR = 22050  # only for waveform plotting
 
 # ── Cached model loading ──────────────────────────────────────────────
 
+
 @st.cache_resource
 def _load_detector() -> BowelSoundDetector:
     config_path = PROJECT_ROOT / "results" / "best_model_config.json"
@@ -41,10 +43,13 @@ def _load_detector() -> BowelSoundDetector:
 
 # ── UI Sections ───────────────────────────────────────────────────────
 
+
 def _render_header(config: dict) -> None:
     st.title("Bowel Sound Detector")
-    st.markdown("*Automatic detection and classification of bowel sounds in abdominal "
-                "audio recordings*")
+    st.markdown(
+        "*Automatic detection and classification of bowel sounds in abdominal "
+        "audio recordings*"
+    )
     st.markdown(
         f"**Model:** `{config['model']}` &nbsp; | &nbsp; "
         f"**Macro-F1:** `{config['macro_f1']:.4f}` &nbsp; | &nbsp; "
@@ -63,9 +68,16 @@ def _render_waveform(tmp_path: str, detections: pd.DataFrame) -> None:
     t_ds, y_ds = t[::step], y[::step]
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t_ds, y=y_ds, mode="lines",
-                             line=dict(color="grey", width=0.5),
-                             name="Waveform", showlegend=True))
+    fig.add_trace(
+        go.Scatter(
+            x=t_ds,
+            y=y_ds,
+            mode="lines",
+            line=dict(color="grey", width=0.5),
+            name="Waveform",
+            showlegend=True,
+        )
+    )
 
     legend_added: set[str] = set()
     for _, row in detections.iterrows():
@@ -73,21 +85,29 @@ def _render_waveform(tmp_path: str, detections: pd.DataFrame) -> None:
         show_legend = cls not in legend_added
         legend_added.add(cls)
         fig.add_vrect(
-            x0=row["start_s"], x1=row["end_s"],
-            fillcolor=CLASS_COLORS[cls], line_width=0,
+            x0=row["start_s"],
+            x1=row["end_s"],
+            fillcolor=CLASS_COLORS[cls],
+            line_width=0,
             annotation_text=cls if (row["end_s"] - row["start_s"]) > 0.5 else "",
             annotation_position="top left",
         )
         if show_legend:
-            fig.add_trace(go.Scatter(
-                x=[None], y=[None], mode="markers",
-                marker=dict(size=10, color=CLASS_COLORS_SOLID[cls]),
-                name=f"{cls} ({CLASS_LABELS[cls]})",
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="markers",
+                    marker=dict(size=10, color=CLASS_COLORS_SOLID[cls]),
+                    name=f"{cls} ({CLASS_LABELS[cls]})",
+                )
+            )
 
     fig.update_layout(
-        xaxis_title="Time (s)", yaxis_title="Amplitude",
-        height=400, margin=dict(l=40, r=20, t=30, b=40),
+        xaxis_title="Time (s)",
+        yaxis_title="Amplitude",
+        height=400,
+        margin=dict(l=40, r=20, t=30, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -97,24 +117,35 @@ def _render_table(detections: pd.DataFrame) -> None:
     st.subheader("Detection Table")
     display_df = detections.copy()
     display_df["Duration (s)"] = (display_df["end_s"] - display_df["start_s"]).round(3)
-    display_df = display_df.rename(columns={
-        "start_s": "Start (s)", "end_s": "End (s)",
-        "class_label": "Class", "confidence": "Confidence",
-    })
-    display_df = display_df[["Start (s)", "End (s)", "Duration (s)", "Class", "Confidence"]]
+    display_df = display_df.rename(
+        columns={
+            "start_s": "Start (s)",
+            "end_s": "End (s)",
+            "class_label": "Class",
+            "confidence": "Confidence",
+        }
+    )
+    display_df = display_df[
+        ["Start (s)", "End (s)", "Duration (s)", "Class", "Confidence"]
+    ]
 
     def _color_class(val: str) -> str:
-        colors = {"b": "color: #4C72B0; font-weight: bold",
-                  "mb": "color: #DD8452; font-weight: bold",
-                  "h": "color: #55A868; font-weight: bold"}
+        colors = {
+            "b": "color: #4C72B0; font-weight: bold",
+            "mb": "color: #DD8452; font-weight: bold",
+            "h": "color: #55A868; font-weight: bold",
+        }
         return colors.get(val, "")
 
     styled = display_df.style.map(_color_class, subset=["Class"])
-    st.dataframe(styled, use_container_width=True,
-                 height=min(400, 40 + 35 * len(display_df)))
+    st.dataframe(
+        styled, use_container_width=True, height=min(400, 40 + 35 * len(display_df))
+    )
 
     total_dur = display_df["Duration (s)"].sum()
-    st.markdown(f"**Totals:** {len(display_df)} events, {total_dur:.2f}s total duration")
+    st.markdown(
+        f"**Totals:** {len(display_df)} events, {total_dur:.2f}s total duration"
+    )
 
 
 def _render_export(detections: pd.DataFrame, config: dict) -> None:
@@ -123,8 +154,12 @@ def _render_export(detections: pd.DataFrame, config: dict) -> None:
 
     with col1:
         csv_data = detections.to_csv(index=False)
-        st.download_button("Download detections as CSV", csv_data,
-                           file_name="detections.csv", mime="text/csv")
+        st.download_button(
+            "Download detections as CSV",
+            csv_data,
+            file_name="detections.csv",
+            mime="text/csv",
+        )
 
     with col2:
         report = {
@@ -136,11 +171,16 @@ def _render_export(detections: pd.DataFrame, config: dict) -> None:
             "detections": detections.to_dict(orient="records"),
         }
         json_data = json.dumps(report, indent=2)
-        st.download_button("Download report as JSON", json_data,
-                           file_name="report.json", mime="application/json")
+        st.download_button(
+            "Download report as JSON",
+            json_data,
+            file_name="report.json",
+            mime="application/json",
+        )
 
 
 # ── Main ──────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     st.set_page_config(page_title="Bowel Sound Detector", layout="wide")
@@ -160,10 +200,12 @@ def main() -> None:
         tmp_path = tmp.name
 
     info = sf.info(tmp_path)
-    st.markdown(f"**File:** `{uploaded.name}` &nbsp; | &nbsp; "
-                f"**Duration:** {info.duration:.2f}s &nbsp; | &nbsp; "
-                f"**Sample rate:** {info.samplerate} Hz &nbsp; | &nbsp; "
-                f"**Channels:** {info.channels}")
+    st.markdown(
+        f"**File:** `{uploaded.name}` &nbsp; | &nbsp; "
+        f"**Duration:** {info.duration:.2f}s &nbsp; | &nbsp; "
+        f"**Sample rate:** {info.samplerate} Hz &nbsp; | &nbsp; "
+        f"**Channels:** {info.channels}"
+    )
 
     # Detection
     if st.button("Detect bowel sounds", type="primary"):
@@ -186,8 +228,10 @@ def main() -> None:
     n_b = len(detections[detections["class_label"] == "b"])
     n_mb = len(detections[detections["class_label"] == "mb"])
     n_h = len(detections[detections["class_label"] == "h"])
-    st.success(f"Found **{len(detections)}** events "
-               f"({n_b} single bursts, {n_mb} multiple bursts, {n_h} harmonics)")
+    st.success(
+        f"Found **{len(detections)}** events "
+        f"({n_b} single bursts, {n_mb} multiple bursts, {n_h} harmonics)"
+    )
 
     _render_waveform(tmp_path, detections)
     _render_table(detections)

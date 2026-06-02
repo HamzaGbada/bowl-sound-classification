@@ -31,6 +31,7 @@ app = "app.streamlit_app:main"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0",
+    "black>=25.0",
 ]
 
 [tool.pytest.ini_options]

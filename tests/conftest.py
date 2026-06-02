@@ -1,4 +1,5 @@
 """Shared fixtures and mock factories for the test suite."""
+
 from __future__ import annotations
 
 import json
@@ -10,10 +11,16 @@ import numpy as np
 import pytest
 import torch
 
-from src.config import SR, NUM_CLASSES, TARGET_CLASSES, PreprocessingConfig, TrainingConfig
-
+from src.config import (
+    SR,
+    NUM_CLASSES,
+    TARGET_CLASSES,
+    PreprocessingConfig,
+    TrainingConfig,
+)
 
 # ── Audio fixtures ────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def sine_wave() -> np.ndarray:
@@ -59,6 +66,7 @@ def random_batch() -> torch.Tensor:
 
 # ── Config fixtures ───────────────────────────────────────────────────
 
+
 @pytest.fixture
 def default_pp_config() -> PreprocessingConfig:
     """Default preprocessing config — everything disabled."""
@@ -74,7 +82,9 @@ def bandpass_pp_config() -> PreprocessingConfig:
 @pytest.fixture
 def full_pp_config() -> PreprocessingConfig:
     """Full preprocessing config — all steps enabled."""
-    return PreprocessingConfig(use_bandpass=True, use_normalise=True, use_augmentation=True)
+    return PreprocessingConfig(
+        use_bandpass=True, use_normalise=True, use_augmentation=True
+    )
 
 
 @pytest.fixture
@@ -85,6 +95,7 @@ def default_training_config() -> TrainingConfig:
 
 # ── File-system fixtures ──────────────────────────────────────────────
 
+
 @pytest.fixture
 def label_file(tmp_path: Path) -> Path:
     """Create a temporary label file with known events."""
@@ -92,11 +103,11 @@ def label_file(tmp_path: Path) -> Path:
         "1.0\t1.1\tb\n"
         "2.0\t2.5\tmb\n"
         "3.0\t3.8\th\n"
-        "4.0\t4.1\tsb\n"       # should be mapped to b
-        "5.0\t5.05\tsbs\n"     # should be mapped to b (typo)
-        "6.0\t7.0\tv\n"        # should be excluded
-        "8.0\t9.0\tn\n"        # should be excluded
-        "bad line\n"            # should be skipped
+        "4.0\t4.1\tsb\n"  # should be mapped to b
+        "5.0\t5.05\tsbs\n"  # should be mapped to b (typo)
+        "6.0\t7.0\tv\n"  # should be excluded
+        "8.0\t9.0\tn\n"  # should be excluded
+        "bad line\n"  # should be skipped
     )
     p = tmp_path / "test_labels.txt"
     p.write_text(content)
@@ -137,6 +148,7 @@ def best_model_config(tmp_path: Path) -> Path:
 
 # ── Mock factories ────────────────────────────────────────────────────
 
+
 def make_mock_model(output_logits: torch.Tensor | None = None) -> MagicMock:
     """Create a mock model that returns fixed logits.
 
@@ -160,6 +172,8 @@ def make_mock_dataloader(n_batches: int = 2, batch_size: int = 4) -> list:
     for _ in range(n_batches):
         specs = torch.randn(batch_size, 1, 128, 128)
         labels = torch.randint(0, NUM_CLASSES, (batch_size,))
-        metas = [{"file_id": "test", "start": 0.0, "end": 0.5, "label_name": "b"}] * batch_size
+        metas = [
+            {"file_id": "test", "start": 0.0, "end": 0.5, "label_name": "b"}
+        ] * batch_size
         batches.append((specs, labels, metas))
     return batches

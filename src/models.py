@@ -1,9 +1,15 @@
 """Model architectures: ResNet18, CRNN, EfficientNet-B0 (PANNs proxy)."""
+
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18, ResNet18_Weights, efficientnet_b0, EfficientNet_B0_Weights
+from torchvision.models import (
+    resnet18,
+    ResNet18_Weights,
+    efficientnet_b0,
+    EfficientNet_B0_Weights,
+)
 
 try:
     from src.config import NUM_CLASSES
@@ -12,6 +18,7 @@ except ImportError:
 
 
 # ── Utility ───────────────────────────────────────────────────────────
+
 
 def _adapt_first_conv(model: nn.Module, attr_path: str) -> None:
     """Replace the first conv layer to accept 1-channel input by averaging RGB weights."""
@@ -22,7 +29,8 @@ def _adapt_first_conv(model: nn.Module, attr_path: str) -> None:
     old_conv: nn.Conv2d = getattr(parent, parts[-1])
 
     new_conv = nn.Conv2d(
-        1, old_conv.out_channels,
+        1,
+        old_conv.out_channels,
         kernel_size=old_conv.kernel_size,
         stride=old_conv.stride,
         padding=old_conv.padding,
@@ -37,6 +45,7 @@ def _adapt_first_conv(model: nn.Module, attr_path: str) -> None:
 
 
 # ── Model definitions ────────────────────────────────────────────────
+
 
 class ResNetMelCNN(nn.Module):
     """M1: ResNet18 pretrained, adapted for 1-channel mel spectrogram input."""
@@ -58,15 +67,24 @@ class CRNN(nn.Module):
         super().__init__()
         self.cnn = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64), nn.ReLU(), nn.MaxPool2d(2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128), nn.ReLU(), nn.MaxPool2d(2),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
         )
         self.lstm = nn.LSTM(
-            input_size=128 * 16, hidden_size=128,
-            num_layers=2, bidirectional=True, batch_first=True,
+            input_size=128 * 16,
+            hidden_size=128,
+            num_layers=2,
+            bidirectional=True,
+            batch_first=True,
         )
         self.fc = nn.Linear(256, NUM_CLASSES)
 
@@ -107,5 +125,7 @@ MODEL_REGISTRY: dict[str, type[nn.Module]] = {
 def get_model(name: str) -> nn.Module:
     """Factory function: instantiate a model by its registry name."""
     if name not in MODEL_REGISTRY:
-        raise ValueError(f"Unknown model: {name}. Choose from {list(MODEL_REGISTRY.keys())}")
+        raise ValueError(
+            f"Unknown model: {name}. Choose from {list(MODEL_REGISTRY.keys())}"
+        )
     return MODEL_REGISTRY[name]()

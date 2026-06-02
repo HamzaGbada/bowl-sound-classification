@@ -1,4 +1,5 @@
 """Tests for src/dataset.py — Dataset, splits, class weights, collate."""
+
 from __future__ import annotations
 
 from unittest.mock import patch, MagicMock
@@ -10,14 +11,17 @@ import torch
 from src.config import TARGET_CLASSES, NUM_CLASSES, PreprocessingConfig
 from src.dataset import compute_class_weights, collate_fn
 
-
 # ── compute_class_weights ─────────────────────────────────────────────
 
+
 class TestComputeClassWeights:
-    @pytest.mark.parametrize("labels,expected_len", [
-        ([0, 0, 0, 1, 1, 2], NUM_CLASSES),
-        ([0, 1, 2], NUM_CLASSES),
-    ])
+    @pytest.mark.parametrize(
+        "labels,expected_len",
+        [
+            ([0, 0, 0, 1, 1, 2], NUM_CLASSES),
+            ([0, 1, 2], NUM_CLASSES),
+        ],
+    )
     def test_output_length(self, labels: list[int], expected_len: int):
         ds = MagicMock()
         ds.labels = labels
@@ -66,6 +70,7 @@ class TestComputeClassWeights:
 
 # ── collate_fn ────────────────────────────────────────────────────────
 
+
 class TestCollateFn:
     def test_stacks_specs(self):
         batch = [
@@ -108,6 +113,7 @@ class TestCollateFn:
 
 # ── PreprocessingConfig integration ───────────────────────────────────
 
+
 class TestPreprocessingConfigIntegration:
     def test_default_config_has_all_flags_false(self):
         config = PreprocessingConfig()
@@ -116,11 +122,14 @@ class TestPreprocessingConfigIntegration:
         assert d["use_normalise"] is False
         assert d["use_augmentation"] is False
 
-    @pytest.mark.parametrize("input_dict", [
-        {"use_bandpass": True, "use_normalise": False, "use_augmentation": False},
-        {"use_bandpass": True, "use_normalise": True, "use_augmentation": True},
-        {},
-    ])
+    @pytest.mark.parametrize(
+        "input_dict",
+        [
+            {"use_bandpass": True, "use_normalise": False, "use_augmentation": False},
+            {"use_bandpass": True, "use_normalise": True, "use_augmentation": True},
+            {},
+        ],
+    )
     def test_dict_roundtrip(self, input_dict: dict):
         """Configs from JSON should survive dict→dataclass→dict roundtrip."""
         config = PreprocessingConfig.from_dict(input_dict)

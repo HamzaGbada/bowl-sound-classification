@@ -1,10 +1,12 @@
 """Test-set evaluation: loads best checkpoint, computes metrics, saves results."""
+
 from __future__ import annotations
 
 import argparse
 import json
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,17 +14,32 @@ import seaborn as sns
 import torch
 from torch.utils.data import DataLoader
 from torchmetrics.classification import (
-    MulticlassF1Score, MulticlassPrecision, MulticlassRecall, MulticlassConfusionMatrix,
+    MulticlassF1Score,
+    MulticlassPrecision,
+    MulticlassRecall,
+    MulticlassConfusionMatrix,
 )
 
 try:
-    from src.config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from src.config import (
+        SEED,
+        NUM_CLASSES,
+        EXPERIMENTS_DIR,
+        TARGET_CLASSES,
+        PreprocessingConfig,
+    )
     from src.audio import set_seed
     from src.models import get_model
     from src.dataset import BowelSoundDataset, get_splits, collate_fn
     from src.train import build_datasets
 except ImportError:
-    from config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from config import (
+        SEED,
+        NUM_CLASSES,
+        EXPERIMENTS_DIR,
+        TARGET_CLASSES,
+        PreprocessingConfig,
+    )
     from audio import set_seed
     from models import get_model
     from dataset import BowelSoundDataset, get_splits, collate_fn
@@ -31,11 +48,17 @@ except ImportError:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, choices=["resnet_cnn", "crnn", "panns"])
+    parser.add_argument(
+        "--model", required=True, choices=["resnet_cnn", "crnn", "panns"]
+    )
     parser.add_argument("--exp", required=True)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--preprocessing", type=str, default=None,
-                        help="JSON string with preprocessing config")
+    parser.add_argument(
+        "--preprocessing",
+        type=str,
+        default=None,
+        help="JSON string with preprocessing config",
+    )
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -49,21 +72,30 @@ def main() -> None:
     else:
         _, _, test_ds = build_datasets()
 
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False,
-                             collate_fn=collate_fn, num_workers=2, pin_memory=True)
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=2,
+        pin_memory=True,
+    )
     print(f"Test set size: {len(test_ds)}")
 
     # Load model
     exp_dir = EXPERIMENTS_DIR / args.exp
     model = get_model(args.model).to(device)
-    model.load_state_dict(torch.load(exp_dir / "best_model.pt", map_location=device,
-                                     weights_only=True))
+    model.load_state_dict(
+        torch.load(exp_dir / "best_model.pt", map_location=device, weights_only=True)
+    )
     model.eval()
 
     # Metrics
     f1_per_class = MulticlassF1Score(num_classes=NUM_CLASSES, average=None).to(device)
     f1_macro = MulticlassF1Score(num_classes=NUM_CLASSES, average="macro").to(device)
-    prec_per_class = MulticlassPrecision(num_classes=NUM_CLASSES, average=None).to(device)
+    prec_per_class = MulticlassPrecision(num_classes=NUM_CLASSES, average=None).to(
+        device
+    )
     rec_per_class = MulticlassRecall(num_classes=NUM_CLASSES, average=None).to(device)
     cm_metric = MulticlassConfusionMatrix(num_classes=NUM_CLASSES).to(device)
 
@@ -98,8 +130,15 @@ def main() -> None:
 
     # Confusion matrix plot
     fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(np.array(cm), annot=True, fmt="g", cmap="Blues",
-                xticklabels=TARGET_CLASSES, yticklabels=TARGET_CLASSES, ax=ax)
+    sns.heatmap(
+        np.array(cm),
+        annot=True,
+        fmt="g",
+        cmap="Blues",
+        xticklabels=TARGET_CLASSES,
+        yticklabels=TARGET_CLASSES,
+        ax=ax,
+    )
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
     ax.set_title(f"Confusion Matrix — {args.model}")

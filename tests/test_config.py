@@ -1,17 +1,30 @@
 """Tests for src/config.py — constants, paths, and configuration dataclasses."""
+
 from __future__ import annotations
 
 import pytest
 
 from src.config import (
-    SR, N_MELS, N_FFT, HOP_LENGTH, SPEC_SIZE, SEED,
-    NUM_CLASSES, TARGET_CLASSES, CLASS_TO_IDX, LABEL_MAP,
-    PROJECT_ROOT, DATA_DIR, EXPERIMENTS_DIR, RESULTS_DIR,
-    PreprocessingConfig, TrainingConfig,
+    SR,
+    N_MELS,
+    N_FFT,
+    HOP_LENGTH,
+    SPEC_SIZE,
+    SEED,
+    NUM_CLASSES,
+    TARGET_CLASSES,
+    CLASS_TO_IDX,
+    LABEL_MAP,
+    PROJECT_ROOT,
+    DATA_DIR,
+    EXPERIMENTS_DIR,
+    RESULTS_DIR,
+    PreprocessingConfig,
+    TrainingConfig,
 )
 
-
 # ── Constants ─────────────────────────────────────────────────────────
+
 
 class TestConstants:
     def test_audio_constants(self):
@@ -37,12 +50,18 @@ class TestConstants:
     def test_seed(self):
         assert SEED == 42
 
-    def test_paths_exist(self):
+    def test_project_root_exists(self):
         assert PROJECT_ROOT.exists()
-        assert DATA_DIR.exists()
+
+    def test_paths_are_absolute(self):
+        assert PROJECT_ROOT.is_absolute()
+        assert DATA_DIR.is_absolute()
+        assert EXPERIMENTS_DIR.is_absolute()
+        assert RESULTS_DIR.is_absolute()
 
 
 # ── PreprocessingConfig ───────────────────────────────────────────────
+
 
 class TestPreprocessingConfig:
     def test_defaults(self, default_pp_config: PreprocessingConfig):
@@ -52,32 +71,40 @@ class TestPreprocessingConfig:
         assert default_pp_config.low_hz == 21.5
         assert default_pp_config.high_hz == 409.1
 
-    @pytest.mark.parametrize("field,value", [
-        ("use_bandpass", True),
-        ("use_normalise", True),
-        ("use_augmentation", True),
-        ("low_hz", 50.0),
-        ("high_hz", 500.0),
-    ])
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("use_bandpass", True),
+            ("use_normalise", True),
+            ("use_augmentation", True),
+            ("low_hz", 50.0),
+            ("high_hz", 500.0),
+        ],
+    )
     def test_custom_fields(self, field: str, value):
         config = PreprocessingConfig(**{field: value})
         assert getattr(config, field) == value
 
-    @pytest.mark.parametrize("input_dict,expected_bandpass", [
-        ({"use_bandpass": True}, True),
-        ({"use_bandpass": False, "use_normalise": True}, False),
-        ({}, False),
-    ])
+    @pytest.mark.parametrize(
+        "input_dict,expected_bandpass",
+        [
+            ({"use_bandpass": True}, True),
+            ({"use_bandpass": False, "use_normalise": True}, False),
+            ({}, False),
+        ],
+    )
     def test_from_dict(self, input_dict: dict, expected_bandpass: bool):
         config = PreprocessingConfig.from_dict(input_dict)
         assert config.use_bandpass is expected_bandpass
 
     def test_from_dict_ignores_unknown_keys(self):
-        config = PreprocessingConfig.from_dict({
-            "use_bandpass": True,
-            "unknown_future_key": 42,
-            "another_key": "hello",
-        })
+        config = PreprocessingConfig.from_dict(
+            {
+                "use_bandpass": True,
+                "unknown_future_key": 42,
+                "another_key": "hello",
+            }
+        )
         assert config.use_bandpass is True
         assert not hasattr(config, "unknown_future_key")
 
@@ -93,20 +120,25 @@ class TestPreprocessingConfig:
         assert a == b
         assert a != c
 
-    @pytest.mark.parametrize("json_str", [
-        '{"use_bandpass": true, "use_normalise": false, "use_augmentation": false}',
-        '{"use_bandpass": true}',
-        '{}',
-    ])
+    @pytest.mark.parametrize(
+        "json_str",
+        [
+            '{"use_bandpass": true, "use_normalise": false, "use_augmentation": false}',
+            '{"use_bandpass": true}',
+            "{}",
+        ],
+    )
     def test_from_dict_with_json_strings(self, json_str: str):
         """Backward compat: configs from shell scripts arrive as JSON strings."""
         import json
+
         d = json.loads(json_str)
         config = PreprocessingConfig.from_dict(d)
         assert isinstance(config, PreprocessingConfig)
 
 
 # ── TrainingConfig ────────────────────────────────────────────────────
+
 
 class TestTrainingConfig:
     def test_defaults(self, default_training_config: TrainingConfig):

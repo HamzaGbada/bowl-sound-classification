@@ -1,4 +1,5 @@
 """Standalone inference engine for bowel sound detection. No Streamlit dependency."""
+
 from __future__ import annotations
 
 import json
@@ -42,7 +43,9 @@ class BowelSoundDetector:
             self.config: dict = json.load(f)
 
         # Build preprocessing config — never augment at inference
-        self.pp_config = PreprocessingConfig.from_dict(self.config["preprocessing_config"])
+        self.pp_config = PreprocessingConfig.from_dict(
+            self.config["preprocessing_config"]
+        )
         self.pp_config.use_augmentation = False
 
         # Load model
@@ -75,7 +78,7 @@ class BowelSoundDetector:
         raw_detections: list[dict] = []
         with torch.no_grad():
             for start_sample in range(0, len(y) - window_samples + 1, hop_samples):
-                segment = y[start_sample:start_sample + window_samples]
+                segment = y[start_sample : start_sample + window_samples]
                 if len(segment) < window_samples:
                     segment = np.pad(segment, (0, window_samples - len(segment)))
 
@@ -90,16 +93,20 @@ class BowelSoundDetector:
                 if confidence >= confidence_threshold:
                     start_s = start_sample / SR
                     end_s = start_s + window_s
-                    raw_detections.append({
-                        "start_s": round(start_s, 3),
-                        "end_s": round(min(end_s, total_dur), 3),
-                        "class_idx": pred_class,
-                        "class_label": TARGET_CLASSES[pred_class],
-                        "confidence": round(confidence, 4),
-                    })
+                    raw_detections.append(
+                        {
+                            "start_s": round(start_s, 3),
+                            "end_s": round(min(end_s, total_dur), 3),
+                            "class_idx": pred_class,
+                            "class_label": TARGET_CLASSES[pred_class],
+                            "confidence": round(confidence, 4),
+                        }
+                    )
 
         if not raw_detections:
-            return pd.DataFrame(columns=["start_s", "end_s", "class_label", "confidence"])
+            return pd.DataFrame(
+                columns=["start_s", "end_s", "class_label", "confidence"]
+            )
 
         merged = self._merge_detections(raw_detections, max_gap=0.2)
         return pd.DataFrame(merged)[["start_s", "end_s", "class_label", "confidence"]]
@@ -113,8 +120,10 @@ class BowelSoundDetector:
         merged = [detections[0].copy()]
         for det in detections[1:]:
             prev = merged[-1]
-            if (det["class_label"] == prev["class_label"]
-                    and det["start_s"] - prev["end_s"] <= max_gap):
+            if (
+                det["class_label"] == prev["class_label"]
+                and det["start_s"] - prev["end_s"] <= max_gap
+            ):
                 prev["end_s"] = det["end_s"]
                 prev["confidence"] = max(prev["confidence"], det["confidence"])
             else:

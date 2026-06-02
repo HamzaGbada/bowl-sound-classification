@@ -1,4 +1,5 @@
 """Shared audio I/O, spectrogram computation, and seed utilities."""
+
 from __future__ import annotations
 
 import json
@@ -10,12 +11,33 @@ import torch
 import torch.nn.functional as F
 
 try:
-    from src.config import SR, N_MELS, N_FFT, HOP_LENGTH, SPEC_SIZE, DATA_DIR, LABEL_MAP, TARGET_CLASSES, SEED
+    from src.config import (
+        SR,
+        N_MELS,
+        N_FFT,
+        HOP_LENGTH,
+        SPEC_SIZE,
+        DATA_DIR,
+        LABEL_MAP,
+        TARGET_CLASSES,
+        SEED,
+    )
 except ImportError:
-    from config import SR, N_MELS, N_FFT, HOP_LENGTH, SPEC_SIZE, DATA_DIR, LABEL_MAP, TARGET_CLASSES, SEED
+    from config import (
+        SR,
+        N_MELS,
+        N_FFT,
+        HOP_LENGTH,
+        SPEC_SIZE,
+        DATA_DIR,
+        LABEL_MAP,
+        TARGET_CLASSES,
+        SEED,
+    )
 
 
 # ── Reproducibility ───────────────────────────────────────────────────
+
 
 def set_seed(seed: int = SEED) -> None:
     """Set all random seeds for full reproducibility."""
@@ -28,6 +50,7 @@ def set_seed(seed: int = SEED) -> None:
 
 
 # ── Audio loading ─────────────────────────────────────────────────────
+
 
 def load_audio_files(data_dir: Path = DATA_DIR) -> dict[str, np.ndarray]:
     """Load and resample all audio files to the working sample rate."""
@@ -49,7 +72,9 @@ def parse_labels(filepath: Path, file_id: str) -> list[dict]:
             start, end, label = float(parts[0]), float(parts[1]), parts[2].strip()
             label = LABEL_MAP.get(label, label)
             if label in TARGET_CLASSES:
-                rows.append({"start": start, "end": end, "label": label, "file_id": file_id})
+                rows.append(
+                    {"start": start, "end": end, "label": label, "file_id": file_id}
+                )
     return rows
 
 
@@ -61,6 +86,7 @@ def load_eda_summary(data_dir: Path = DATA_DIR) -> dict:
 
 # ── Spectrogram computation ──────────────────────────────────────────
 
+
 def compute_mel_spectrogram(segment: np.ndarray, sr: int = SR) -> torch.Tensor:
     """Convert a raw audio segment to a log-mel spectrogram tensor (1, 128, 128).
 
@@ -68,12 +94,18 @@ def compute_mel_spectrogram(segment: np.ndarray, sr: int = SR) -> torch.Tensor:
     and inference to guarantee consistency.
     """
     S = librosa.feature.melspectrogram(
-        y=segment, sr=sr, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH,
+        y=segment,
+        sr=sr,
+        n_mels=N_MELS,
+        n_fft=N_FFT,
+        hop_length=HOP_LENGTH,
     )
     S_db = librosa.power_to_db(S, ref=np.max)
     spec = torch.tensor(S_db, dtype=torch.float32).unsqueeze(0)
     spec = F.interpolate(
-        spec.unsqueeze(0), size=(SPEC_SIZE, SPEC_SIZE),
-        mode="bilinear", align_corners=False,
+        spec.unsqueeze(0),
+        size=(SPEC_SIZE, SPEC_SIZE),
+        mode="bilinear",
+        align_corners=False,
     ).squeeze(0)
     return spec
