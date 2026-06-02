@@ -1,38 +1,49 @@
-"""Standalone inference engine for bowel sound detection. No Streamlit imports."""
+"""Standalone inference engine for bowel sound detection. No Streamlit dependency."""
+from __future__ import annotations
+
 import json
 import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
+
+try:
+    from src.config import SR, TARGET_CLASSES, PROJECT_ROOT, PreprocessingConfig
+    from src.audio import compute_mel_spectrogram
+    from src.models import get_model
+    from src.preprocessing import apply_preprocessing_pipeline
+except ImportError:
+    SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+    sys.path.insert(0, str(SRC_DIR))
+    from config import SR, TARGET_CLASSES, PROJECT_ROOT, PreprocessingConfig
+    from audio import compute_mel_spectrogram
+    from models import get_model
+    from preprocessing import apply_preprocessing_pipeline
+
 import librosa
-from pathlib import Path
-
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
-sys.path.insert(0, str(SRC_DIR))
-from models import get_model
-from preprocessing import apply_preprocessing_pipeline
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SR = 22050
-N_MELS = 128
-N_FFT = 1024
-HOP_LENGTH = 512
-CLASS_NAMES = ["b", "mb", "h"]
 
 
 class BowelSoundDetector:
-    def __init__(self, config_path=None):
+    """Sliding-window bowel sound detector using a trained classification model.
+
+    Loads the best model configuration from a JSON file and provides a
+    ``detect()`` method that scans an entire audio file for bowel sound events.
+    """
+
+    def __init__(self, config_path: str | Path | None = None) -> None:
         if config_path is None:
             config_path = PROJECT_ROOT / "results" / "best_model_config.json"
         else:
             config_path = Path(config_path)
 
         with open(config_path) as f:
-            self.config = json.load(f)
+            self.config: dict = json.load(f)
 
-        self.pp_config = self.config["preprocessing_config"]
-        self.pp_config["use_augmentation"] = False  # never augment at inference
+        # Build preprocessing config — never augment at inference
+        self.pp_config = PreprocessingConfig.from_dict(self.config["preprocessing_config"])
+        self.pp_config.use_augmentation = False
 
         # Load model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,38 +54,33 @@ class BowelSoundDetector:
         )
         self.model.eval()
 
-    def _audio_to_spectrogram(self, segment):
-        """Convert raw audio segment to (1, 1, 128, 128) tensor."""
-        S = librosa.feature.melspectrogram(
-            y=segment, sr=SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH
-        )
-        S_db = librosa.power_to_db(S, ref=np.max)
-        spec = torch.tensor(S_db, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        spec = F.interpolate(spec, size=(128, 128), mode="bilinear",
-                             align_corners=False)
-        return spec
-
-    def detect(self, wav_path, window_s=1.0, hop_s=0.1, confidence_threshold=0.6):
+    def detect(
+        self,
+        wav_path: str | Path,
+        window_s: float = 1.0,
+        hop_s: float = 0.1,
+        confidence_threshold: float = 0.6,
+    ) -> pd.DataFrame:
         """Run sliding-window detection on a full audio file.
 
         Returns a DataFrame with columns: start_s, end_s, class_label, confidence.
         """
         y, _ = librosa.load(str(wav_path), sr=SR, mono=True)
-        y = apply_preprocessing_pipeline(y, SR, self.pp_config)
+        y = apply_preprocessing_pipeline(y, SR, self.pp_config.to_dict())
 
         total_dur = len(y) / SR
         window_samples = int(window_s * SR)
         hop_samples = int(hop_s * SR)
 
-        # Sliding window predictions
-        raw_detections = []
+        raw_detections: list[dict] = []
         with torch.no_grad():
             for start_sample in range(0, len(y) - window_samples + 1, hop_samples):
                 segment = y[start_sample:start_sample + window_samples]
                 if len(segment) < window_samples:
                     segment = np.pad(segment, (0, window_samples - len(segment)))
 
-                spec = self._audio_to_spectrogram(segment).to(self.device)
+                # Use shared spectrogram function, add batch dim
+                spec = compute_mel_spectrogram(segment).unsqueeze(0).to(self.device)
                 logits = self.model(spec)
                 probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
 
@@ -88,19 +94,18 @@ class BowelSoundDetector:
                         "start_s": round(start_s, 3),
                         "end_s": round(min(end_s, total_dur), 3),
                         "class_idx": pred_class,
-                        "class_label": CLASS_NAMES[pred_class],
+                        "class_label": TARGET_CLASSES[pred_class],
                         "confidence": round(confidence, 4),
                     })
 
         if not raw_detections:
             return pd.DataFrame(columns=["start_s", "end_s", "class_label", "confidence"])
 
-        # Merge consecutive windows of the same class (gap < 0.2s)
         merged = self._merge_detections(raw_detections, max_gap=0.2)
         return pd.DataFrame(merged)[["start_s", "end_s", "class_label", "confidence"]]
 
     @staticmethod
-    def _merge_detections(detections, max_gap=0.2):
+    def _merge_detections(detections: list[dict], max_gap: float = 0.2) -> list[dict]:
         """Merge consecutive detections of the same class if gap < max_gap."""
         if not detections:
             return []
@@ -119,10 +124,9 @@ class BowelSoundDetector:
 
 
 if __name__ == "__main__":
-    import sys as _sys
     detector = BowelSoundDetector()
-    if len(_sys.argv) > 1:
-        results = detector.detect(_sys.argv[1])
+    if len(sys.argv) > 1:
+        results = detector.detect(sys.argv[1])
         print(results.to_string())
     else:
         print(f"Model: {detector.config['model']}, F1: {detector.config['macro_f1']}")

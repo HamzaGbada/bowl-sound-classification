@@ -1,85 +1,85 @@
-import json
+"""Dataset classes for bowel sound classification.
+
+Provides BowelSoundDataset, stratified splitting, class-weight computation,
+and optional preprocessing/augmentation through PreprocessingConfig.
+"""
+from __future__ import annotations
+
 import numpy as np
 import torch
-import torch.nn.functional as F
-import librosa
 from torch.utils.data import Dataset, Subset
 from sklearn.model_selection import train_test_split
-from pathlib import Path
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from preprocessing import apply_preprocessing_pipeline, augment_clip
-
-SR = 22050
-N_MELS = 128
-N_FFT = 1024
-HOP_LENGTH = 512
-LABEL_MAP = {"sb": "b", "sbs": "b"}
-TARGET_CLASSES = ["b", "mb", "h"]
-CLASS_TO_IDX = {c: i for i, c in enumerate(TARGET_CLASSES)}
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-SEED = 42
-
-
-def load_eda_summary():
-    with open(DATA_DIR / "eda_summary.json") as f:
-        return json.load(f)
-
-
-def parse_labels(filepath, file_id):
-    rows = []
-    with open(filepath) as f:
-        for line in f:
-            parts = line.strip().split("\t")
-            if len(parts) != 3:
-                continue
-            start, end, label = float(parts[0]), float(parts[1]), parts[2].strip()
-            label = LABEL_MAP.get(label, label)
-            if label in TARGET_CLASSES:
-                rows.append({
-                    "start": start, "end": end, "label": label, "file_id": file_id
-                })
-    return rows
+try:
+    from src.config import (
+        SR, DATA_DIR, TARGET_CLASSES, CLASS_TO_IDX, SEED,
+        PreprocessingConfig,
+    )
+    from src.audio import (
+        load_audio_files, parse_labels, load_eda_summary, compute_mel_spectrogram,
+    )
+    from src.preprocessing import apply_preprocessing_pipeline, augment_clip
+except ImportError:
+    from config import (
+        SR, DATA_DIR, TARGET_CLASSES, CLASS_TO_IDX, SEED,
+        PreprocessingConfig,
+    )
+    from audio import (
+        load_audio_files, parse_labels, load_eda_summary, compute_mel_spectrogram,
+    )
+    from preprocessing import apply_preprocessing_pipeline, augment_clip
 
 
-def load_audio_files():
-    audio = {}
-    for name in ["23M74M", "AS_1"]:
-        y, _ = librosa.load(str(DATA_DIR / f"{name}.wav"), sr=SR, mono=True)
-        audio[name] = y
-    return audio
-
-
-DEFAULT_PREPROCESSING_CONFIG = {
-    "use_bandpass": False,
-    "use_normalise": False,
-    "use_augmentation": False,
-}
-
+# ── Main dataset ──────────────────────────────────────────────────────
 
 class BowelSoundDataset(Dataset):
-    def __init__(self, clip_duration=None, preprocessing_config=None, split=None):
+    """Bowel-sound event dataset with optional preprocessing.
+
+    Each item is a (spectrogram, label, metadata) tuple where the spectrogram
+    is a (1, 128, 128) tensor ready for the model.
+    """
+
+    def __init__(
+        self,
+        clip_duration: float | None = None,
+        preprocessing_config: PreprocessingConfig | dict | None = None,
+        split: str | None = None,
+    ) -> None:
         summary = load_eda_summary()
-        self.clip_duration = clip_duration or summary["recommended_segment_duration_s"]
-        self.preprocessing_config = {**DEFAULT_PREPROCESSING_CONFIG,
-                                     **(preprocessing_config or {})}
-        # Add EDA freq band to config for bandpass filter
+        self.clip_duration: float = clip_duration or summary["recommended_segment_duration_s"]
+
+        # Accept both dataclass and raw dict for backward compatibility
+        if preprocessing_config is None:
+            self.pp_config = PreprocessingConfig()
+        elif isinstance(preprocessing_config, dict):
+            self.pp_config = PreprocessingConfig.from_dict(preprocessing_config)
+        else:
+            self.pp_config = preprocessing_config
+
+        # Merge EDA frequency band into config defaults
         freq_band = summary.get("dominant_freq_band_hz", [21.5, 409.1])
-        self.preprocessing_config.setdefault("low_hz", freq_band[0])
-        self.preprocessing_config.setdefault("high_hz", freq_band[1])
+        if self.pp_config.low_hz == 21.5:
+            self.pp_config.low_hz = freq_band[0]
+        if self.pp_config.high_hz == 409.1:
+            self.pp_config.high_hz = freq_band[1]
 
         self.split = split
-        self.audio = load_audio_files()
-        self.events = []
+        self.audio: dict[str, np.ndarray] = load_audio_files()
+
+        self.events: list[dict] = []
         self.events += parse_labels(DATA_DIR / "23M74M.txt", "23M74M")
         self.events += parse_labels(DATA_DIR / "AS_1.txt", "AS_1")
-        self.labels = [CLASS_TO_IDX[e["label"]] for e in self.events]
+        self.labels: list[int] = [CLASS_TO_IDX[e["label"]] for e in self.events]
 
         # Pre-extract and cache raw segments
-        self._segments = [self._extract_raw_segment(i) for i in range(len(self.events))]
+        self._segments: list[np.ndarray] = [
+            self._extract_raw_segment(i) for i in range(len(self.events))
+        ]
 
-    def _extract_raw_segment(self, idx):
+    # ── Internal helpers ──────────────────────────────────────────────
+
+    def _extract_raw_segment(self, idx: int) -> np.ndarray:
+        """Extract a fixed-length clip centered on an event's midpoint."""
         ev = self.events[idx]
         y = self.audio[ev["file_id"]]
         midpoint = (ev["start"] + ev["end"]) / 2
@@ -103,13 +103,9 @@ class BowelSoundDataset(Dataset):
             segment = segment[:expected]
         return segment.astype(np.float32)
 
-    def __len__(self):
-        return len(self.events)
-
-    def _segment_to_spectrogram(self, segment):
-        """Convert raw segment to log-mel spectrogram tensor (1, 128, 128)."""
-        # Apply preprocessing pipeline
-        segment = apply_preprocessing_pipeline(segment, SR, self.preprocessing_config)
+    def _segment_to_spectrogram(self, segment: np.ndarray) -> torch.Tensor:
+        """Apply preprocessing then convert to log-mel spectrogram."""
+        segment = apply_preprocessing_pipeline(segment, SR, self.pp_config.to_dict())
 
         expected = int(self.clip_duration * SR)
         if len(segment) < expected:
@@ -117,16 +113,14 @@ class BowelSoundDataset(Dataset):
         elif len(segment) > expected:
             segment = segment[:expected]
 
-        S = librosa.feature.melspectrogram(
-            y=segment, sr=SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH
-        )
-        S_db = librosa.power_to_db(S, ref=np.max)
-        spec = torch.tensor(S_db, dtype=torch.float32).unsqueeze(0)
-        spec = F.interpolate(spec.unsqueeze(0), size=(128, 128), mode="bilinear",
-                             align_corners=False).squeeze(0)
-        return spec
+        return compute_mel_spectrogram(segment)
 
-    def __getitem__(self, idx):
+    # ── Dataset interface ─────────────────────────────────────────────
+
+    def __len__(self) -> int:
+        return len(self.events)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int, dict]:
         segment = self._segments[idx]
         label = self.labels[idx]
         ev = self.events[idx]
@@ -140,67 +134,24 @@ class BowelSoundDataset(Dataset):
         return spec, label, metadata
 
 
-def get_splits(dataset=None, preprocessing_config=None, clip_duration=None):
-    """Deterministic stratified 70/15/15 split.
-
-    If preprocessing_config is provided, creates separate dataset instances per split
-    so that augmentation only applies to training.
-    Otherwise falls back to Subset-based splitting of a single dataset.
-    """
-    if dataset is None and preprocessing_config is None:
-        raise ValueError("Provide either dataset or preprocessing_config")
-
-    # Build a base dataset for splitting indices
-    base = dataset or BowelSoundDataset(clip_duration=clip_duration)
-    labels = base.labels
-    indices = list(range(len(base.events)))  # only original events
-
-    train_idx, temp_idx = train_test_split(
-        indices, test_size=0.30, stratify=labels, random_state=SEED
-    )
-    temp_labels = [labels[i] for i in temp_idx]
-    val_idx, test_idx = train_test_split(
-        temp_idx, test_size=0.50, stratify=temp_labels, random_state=SEED
-    )
-
-    if preprocessing_config is None:
-        # Legacy path: no preprocessing, Subset-based
-        return Subset(base, train_idx), Subset(base, val_idx), Subset(base, test_idx)
-
-    # Create separate datasets per split with preprocessing
-    splits = {}
-    for split_name, split_idx in [("train", train_idx), ("val", val_idx), ("test", test_idx)]:
-        ds = BowelSoundDataset(
-            clip_duration=clip_duration,
-            preprocessing_config=preprocessing_config,
-            split=split_name,
-        )
-        # Filter to only events in this split (+ augmented items for train)
-        split_ds = _SplitDataset(ds, split_idx)
-        splits[split_name] = split_ds
-
-    return splits["train"], splits["val"], splits["test"]
-
+# ── Split dataset with augmentation ───────────────────────────────────
 
 class _SplitDataset(Dataset):
     """Wraps a BowelSoundDataset, exposing only selected indices + augmented items."""
 
-    def __init__(self, full_dataset, indices):
+    def __init__(self, full_dataset: BowelSoundDataset, indices: list[int]) -> None:
         self.full_dataset = full_dataset
         self.indices = indices
         self.n_original = len(indices)
-        self.labels = [full_dataset.labels[i] for i in indices]
+        self.labels: list[int] = [full_dataset.labels[i] for i in indices]
 
-        # Build augmented items for training split only
-        self._aug_items = []
-        use_aug = full_dataset.preprocessing_config.get("use_augmentation", False)
-        if use_aug and full_dataset.split == "train":
+        self._aug_items: list[tuple[np.ndarray, int, dict]] = []
+        if full_dataset.pp_config.use_augmentation and full_dataset.split == "train":
             self._build_augmented_items()
 
-    def _build_augmented_items(self):
+    def _build_augmented_items(self) -> None:
         """Generate augmented copies for minority classes until balanced."""
-        split_labels = self.labels  # labels of original items in this split
-        counts = np.bincount(split_labels, minlength=len(TARGET_CLASSES))
+        counts = np.bincount(self.labels, minlength=len(TARGET_CLASSES))
         max_count = int(counts.max())
         threshold = int(max_count * 0.5)
         rng = np.random.default_rng(SEED)
@@ -208,8 +159,7 @@ class _SplitDataset(Dataset):
         for cls_idx in range(len(TARGET_CLASSES)):
             if counts[cls_idx] >= threshold:
                 continue
-            # Indices into self.indices for this class
-            cls_positions = [i for i, l in enumerate(split_labels) if l == cls_idx]
+            cls_positions = [i for i, l in enumerate(self.labels) if l == cls_idx]
             needed = max_count - counts[cls_idx]
             generated = 0
             while generated < needed:
@@ -231,45 +181,90 @@ class _SplitDataset(Dataset):
                     self._aug_items.append((v, cls_idx, meta))
                     generated += 1
 
-        # Update labels to include augmented
         self.labels += [item[1] for item in self._aug_items]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.n_original + len(self._aug_items)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int, dict]:
         if idx < self.n_original:
             return self.full_dataset[self.indices[idx]]
-        else:
-            aug_idx = idx - self.n_original
-            segment, label, metadata = self._aug_items[aug_idx]
-            spec = self.full_dataset._segment_to_spectrogram(segment)
-            return spec, label, metadata
+        aug_idx = idx - self.n_original
+        segment, label, metadata = self._aug_items[aug_idx]
+        spec = self.full_dataset._segment_to_spectrogram(segment)
+        return spec, label, metadata
 
 
-def compute_class_weights(dataset):
-    """Inverse frequency class weights."""
+# ── Public API ────────────────────────────────────────────────────────
+
+def get_splits(
+    dataset: BowelSoundDataset | None = None,
+    preprocessing_config: PreprocessingConfig | dict | None = None,
+    clip_duration: float | None = None,
+) -> tuple[Dataset, Dataset, Dataset]:
+    """Deterministic stratified 70/15/15 split.
+
+    If *preprocessing_config* is provided, creates separate dataset instances
+    per split so that augmentation only applies to training.
+    """
+    if dataset is None and preprocessing_config is None:
+        raise ValueError("Provide either dataset or preprocessing_config")
+
+    base = dataset or BowelSoundDataset(clip_duration=clip_duration)
+    labels = base.labels
+    indices = list(range(len(base.events)))
+
+    train_idx, temp_idx = train_test_split(
+        indices, test_size=0.30, stratify=labels, random_state=SEED,
+    )
+    temp_labels = [labels[i] for i in temp_idx]
+    val_idx, test_idx = train_test_split(
+        temp_idx, test_size=0.50, stratify=temp_labels, random_state=SEED,
+    )
+
+    if preprocessing_config is None:
+        return Subset(base, train_idx), Subset(base, val_idx), Subset(base, test_idx)
+
+    # Normalise dict → PreprocessingConfig if needed
+    if isinstance(preprocessing_config, dict):
+        preprocessing_config = PreprocessingConfig.from_dict(preprocessing_config)
+
+    splits: dict[str, Dataset] = {}
+    for split_name, split_idx in [("train", train_idx), ("val", val_idx), ("test", test_idx)]:
+        ds = BowelSoundDataset(
+            clip_duration=clip_duration,
+            preprocessing_config=preprocessing_config,
+            split=split_name,
+        )
+        splits[split_name] = _SplitDataset(ds, split_idx)
+
+    return splits["train"], splits["val"], splits["test"]
+
+
+def compute_class_weights(dataset: Dataset) -> torch.Tensor:
+    """Inverse-frequency class weights for weighted CrossEntropyLoss."""
     if hasattr(dataset, "labels"):
         all_labels = dataset.labels
     elif hasattr(dataset, "dataset") and hasattr(dataset.dataset, "labels"):
-        # Subset
         all_labels = [dataset.dataset.labels[i] for i in dataset.indices]
     else:
         raise ValueError("Cannot extract labels from dataset")
     counts = np.bincount(all_labels, minlength=len(TARGET_CLASSES)).astype(float)
-    counts = np.maximum(counts, 1)  # avoid division by zero
+    counts = np.maximum(counts, 1)
     weights = 1.0 / counts
     weights = weights / weights.sum() * len(TARGET_CLASSES)
     return torch.tensor(weights, dtype=torch.float32)
 
 
-def collate_fn(batch):
+def collate_fn(batch: list) -> tuple[torch.Tensor, torch.Tensor, list[dict]]:
+    """Stack spectrograms and labels into batch tensors."""
     specs, labels, metas = zip(*batch)
     return torch.stack(specs), torch.tensor(labels, dtype=torch.long), list(metas)
 
 
+# ── Self-test ─────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
-    # Test baseline mode (no preprocessing)
     ds = BowelSoundDataset()
     print(f"Total events: {len(ds)}")
     print(f"Clip duration: {ds.clip_duration}s")
@@ -283,9 +278,8 @@ if __name__ == "__main__":
     spec, label, meta = ds[0]
     print(f"Spectrogram shape: {spec.shape}, Label: {label}, Meta: {meta}")
 
-    # Test preprocessed + augmented mode
     print("\n--- Preprocessed + Augmented ---")
-    pp_config = {"use_bandpass": True, "use_normalise": True, "use_augmentation": True}
+    pp_config = PreprocessingConfig(use_bandpass=True, use_normalise=True, use_augmentation=True)
     train_pp, val_pp, test_pp = get_splits(preprocessing_config=pp_config)
     print(f"Preprocessed split — Train: {len(train_pp)}, Val: {len(val_pp)}, Test: {len(test_pp)}")
     print(f"Train class counts: {dict(zip(TARGET_CLASSES, np.bincount(train_pp.labels, minlength=3)))}")

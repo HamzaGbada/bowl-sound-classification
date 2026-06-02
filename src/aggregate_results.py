@@ -1,10 +1,13 @@
 """Aggregate all test_results.json files into a single CSV."""
+from __future__ import annotations
+
 import json
 import csv
-from pathlib import Path
 
-EXPERIMENTS_DIR = Path(__file__).resolve().parent.parent / "experiments"
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
+try:
+    from src.config import EXPERIMENTS_DIR, RESULTS_DIR
+except ImportError:
+    from config import EXPERIMENTS_DIR, RESULTS_DIR
 
 # Map experiment folder names to metadata
 EXPERIMENT_META = {

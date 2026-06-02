@@ -57,20 +57,32 @@ bash run_app.sh
 ```
 data/                   Raw audio + labels + EDA summary
 src/
-  dataset.py            Dataset class with preprocessing + augmentation
-  models.py             ResNet18, CRNN, EfficientNet-B0
+  config.py             Constants, paths, PreprocessingConfig dataclass (single source of truth)
+  audio.py              Shared audio I/O, spectrogram computation, seed utilities
   preprocessing.py      Bandpass filter, RMS normalise, augmentation
-  train.py              Training loop
-  evaluate.py           Test evaluation
+  dataset.py            PyTorch Dataset classes, stratified splitting, class weights
+  models.py             ResNet18, CRNN, EfficientNet-B0 (Factory pattern)
+  train.py              Training loop with early stopping and logging
+  evaluate.py           Test-set evaluation and metrics
   aggregate_results.py  Results aggregator
 app/
-  inference.py          Standalone inference engine
-  streamlit_app.py      Streamlit web app
+  inference.py          Standalone sliding-window inference engine
+  streamlit_app.py      Streamlit web app (decomposed UI sections)
 notebooks/              EDA, preprocessing validation, ablation report
 experiments/            Model checkpoints + training logs
 results/                Aggregated results + best model config
-docs/                   Phase documentation
+docs/                   Phase documentation + architecture guide
 ```
+
+### Architecture Highlights
+
+- **Single source of truth:** All constants (`SR`, `SEED`, `NUM_CLASSES`, paths) defined once in `src/config.py`.
+- **Typed configuration:** `PreprocessingConfig` dataclass replaces raw dicts — provides validation, autocomplete, and serialisation.
+- **Shared spectrogram pipeline:** One `compute_mel_spectrogram()` function in `src/audio.py` used by both training and inference, guaranteeing consistency.
+- **Factory pattern:** `MODEL_REGISTRY` in `models.py` maps string names to model classes — adding a model requires one line.
+- **No over-engineering:** No ABC, no DI framework, no deep nesting. The flat structure is appropriate for a research project of this size.
+
+See `docs/06_architecture.md` for full architectural documentation.
 
 ## Docker
 

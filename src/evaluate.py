@@ -1,36 +1,35 @@
+"""Test-set evaluation: loads best checkpoint, computes metrics, saves results."""
+from __future__ import annotations
+
 import argparse
 import json
-import random
-import numpy as np
-import torch
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+import torch
 from torch.utils.data import DataLoader
 from torchmetrics.classification import (
-    MulticlassF1Score, MulticlassPrecision, MulticlassRecall, MulticlassConfusionMatrix
+    MulticlassF1Score, MulticlassPrecision, MulticlassRecall, MulticlassConfusionMatrix,
 )
-from pathlib import Path
 
-from dataset import (
-    BowelSoundDataset, get_splits, collate_fn, TARGET_CLASSES
-)
-from models import get_model
-
-SEED = 42
-NUM_CLASSES = 3
-EXPERIMENTS_DIR = Path(__file__).resolve().parent.parent / "experiments"
-
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+try:
+    from src.config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from src.audio import set_seed
+    from src.models import get_model
+    from src.dataset import BowelSoundDataset, get_splits, collate_fn
+    from src.train import build_datasets
+except ImportError:
+    from config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from audio import set_seed
+    from models import get_model
+    from dataset import BowelSoundDataset, get_splits, collate_fn
+    from train import build_datasets
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, choices=["resnet_cnn", "crnn", "panns"])
     parser.add_argument("--exp", required=True)
@@ -42,15 +41,14 @@ def main():
     set_seed(SEED)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Data — test split uses preprocessing (bandpass/normalise) but never augmentation
-    pp_config = json.loads(args.preprocessing) if args.preprocessing else None
-    if pp_config:
-        test_pp = {k: v for k, v in pp_config.items()}
-        test_pp["use_augmentation"] = False  # never augment test
-        _, _, test_ds = get_splits(preprocessing_config=test_pp)
+    # Data — test split uses preprocessing but never augmentation
+    if args.preprocessing:
+        pp_dict = json.loads(args.preprocessing)
+        pp_dict["use_augmentation"] = False
+        _, _, test_ds = build_datasets(json.dumps(pp_dict))
     else:
-        dataset = BowelSoundDataset()
-        _, _, test_ds = get_splits(dataset=dataset)
+        _, _, test_ds = build_datasets()
+
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False,
                              collate_fn=collate_fn, num_workers=2, pin_memory=True)
     print(f"Test set size: {len(test_ds)}")
@@ -93,7 +91,6 @@ def main():
         "confusion_matrix": cm,
     }
 
-    # Save results JSON
     with open(exp_dir / "test_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"Results saved to {exp_dir / 'test_results.json'}")
