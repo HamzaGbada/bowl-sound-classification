@@ -1,4 +1,5 @@
 """Training loop with early stopping, logging, and class-weighted loss."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,18 +13,36 @@ from torchmetrics.classification import MulticlassF1Score
 from tqdm import tqdm
 
 try:
-    from src.config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from src.config import (
+        SEED,
+        NUM_CLASSES,
+        EXPERIMENTS_DIR,
+        TARGET_CLASSES,
+        PreprocessingConfig,
+    )
     from src.audio import set_seed
     from src.models import get_model
-    from src.dataset import BowelSoundDataset, get_splits, compute_class_weights, collate_fn
+    from src.dataset import (
+        BowelSoundDataset,
+        get_splits,
+        compute_class_weights,
+        collate_fn,
+    )
 except ImportError:
-    from config import SEED, NUM_CLASSES, EXPERIMENTS_DIR, TARGET_CLASSES, PreprocessingConfig
+    from config import (
+        SEED,
+        NUM_CLASSES,
+        EXPERIMENTS_DIR,
+        TARGET_CLASSES,
+        PreprocessingConfig,
+    )
     from audio import set_seed
     from models import get_model
     from dataset import BowelSoundDataset, get_splits, compute_class_weights, collate_fn
 
 
 # ── Training & evaluation steps ───────────────────────────────────────
+
 
 def train_one_epoch(
     model: torch.nn.Module,
@@ -79,6 +98,7 @@ def evaluate(
 
 # ── Data loading helper ───────────────────────────────────────────────
 
+
 def build_datasets(
     preprocessing_json: str | None = None,
     clip_duration: float | None = None,
@@ -96,17 +116,24 @@ def build_datasets(
 
 # ── Main ──────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, choices=["resnet_cnn", "crnn", "panns"])
+    parser.add_argument(
+        "--model", required=True, choices=["resnet_cnn", "crnn", "panns"]
+    )
     parser.add_argument("--exp", required=True)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight_decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=7)
-    parser.add_argument("--preprocessing", type=str, default=None,
-                        help="JSON string with preprocessing config")
+    parser.add_argument(
+        "--preprocessing",
+        type=str,
+        default=None,
+        help="JSON string with preprocessing config",
+    )
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -117,14 +144,28 @@ def main() -> None:
     train_ds, val_ds, _ = build_datasets(args.preprocessing)
     print(f"Split sizes — Train: {len(train_ds)}, Val: {len(val_ds)}")
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              collate_fn=collate_fn, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
-                            collate_fn=collate_fn, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=2,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=2,
+        pin_memory=True,
+    )
 
     # Model
     model = get_model(args.model).to(device)
-    print(f"Model: {args.model}, Params: {sum(p.numel() for p in model.parameters()):,}")
+    print(
+        f"Model: {args.model}, Params: {sum(p.numel() for p in model.parameters()):,}"
+    )
 
     # Loss with class weights
     class_weights = compute_class_weights(train_ds).to(device)
@@ -132,7 +173,9 @@ def main() -> None:
     criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
 
     # Optimizer + scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     # Experiment dir
@@ -146,24 +189,37 @@ def main() -> None:
 
     with open(log_path, "w", newline="") as log_file:
         writer = csv.writer(log_file)
-        header = ["epoch", "train_loss", "val_loss", "val_macro_f1"] + \
-                 [f"val_f1_{c}" for c in TARGET_CLASSES]
+        header = ["epoch", "train_loss", "val_loss", "val_macro_f1"] + [
+            f"val_f1_{c}" for c in TARGET_CLASSES
+        ]
         writer.writerow(header)
 
         for epoch in range(1, args.epochs + 1):
             print(f"\nEpoch {epoch}/{args.epochs}")
-            train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
-            val_loss, val_macro_f1, per_class_f1 = evaluate(model, val_loader, criterion, device)
+            train_loss = train_one_epoch(
+                model, train_loader, criterion, optimizer, device
+            )
+            val_loss, val_macro_f1, per_class_f1 = evaluate(
+                model, val_loader, criterion, device
+            )
             scheduler.step()
 
-            row = [epoch, f"{train_loss:.4f}", f"{val_loss:.4f}", f"{val_macro_f1:.4f}"] + \
-                  [f"{f:.4f}" for f in per_class_f1]
+            row = [
+                epoch,
+                f"{train_loss:.4f}",
+                f"{val_loss:.4f}",
+                f"{val_macro_f1:.4f}",
+            ] + [f"{f:.4f}" for f in per_class_f1]
             writer.writerow(row)
             log_file.flush()
 
-            f1_str = " | ".join(f"{c}={f:.4f}" for c, f in zip(TARGET_CLASSES, per_class_f1))
-            print(f"  Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | "
-                  f"Val macro-F1: {val_macro_f1:.4f}")
+            f1_str = " | ".join(
+                f"{c}={f:.4f}" for c, f in zip(TARGET_CLASSES, per_class_f1)
+            )
+            print(
+                f"  Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | "
+                f"Val macro-F1: {val_macro_f1:.4f}"
+            )
             print(f"  Per-class F1: {f1_str}")
 
             if val_macro_f1 > best_f1:
@@ -174,7 +230,9 @@ def main() -> None:
             else:
                 patience_counter += 1
                 if patience_counter >= args.patience:
-                    print(f"  Early stopping at epoch {epoch} (patience={args.patience})")
+                    print(
+                        f"  Early stopping at epoch {epoch} (patience={args.patience})"
+                    )
                     break
 
     print(f"\nTraining complete. Best val macro-F1: {best_f1:.4f}")
