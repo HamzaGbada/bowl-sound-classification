@@ -1,10 +1,5 @@
 # Bowel Sound Classification
 
-[![CI](https://github.com/bobmarley/bowl-sound-classification/actions/workflows/ci.yml/badge.svg)](https://github.com/bobmarley/bowl-sound-classification/actions/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Macro-F1: 0.9104](https://img.shields.io/badge/Macro--F1-0.9104-brightgreen.svg)](#results)
-
 Deep learning system for automatic detection and classification of bowel sounds from abdominal audio recordings.
 
 **Classes:** `b` (single burst) | `mb` (multiple burst) | `h` (harmonic)
@@ -88,6 +83,8 @@ bash run_app.sh
 
 ## Results
 
+**Note:** the training was done on local machine with CPU: 13th Gen Intel i7-13620H (16) @ 4.700GHz, GPU: NVIDIA GeForce RTX 4050 Max-Q / Mobile with 6Gb VRAM and Manjaro Linux as an operating system
+
 ### Top 4 Experiments (out of 10)
 
 | Rank | Experiment | Model | Preprocessing | Macro-F1 | F1(b) | F1(mb) | F1(h) |
@@ -135,7 +132,6 @@ notebooks/
   03_ablation_report.ipynb  Ablation study report
 experiments/            Model checkpoints + training logs (10 experiments)
 results/                Aggregated CSV + best model config JSON
-docs/                   7 documentation files (see below)
 ```
 
 ### Architecture Highlights
@@ -225,42 +221,4 @@ docker compose run --rm inference data/23M74M.wav
 
 All services mount `data/`, `experiments/`, and `results/` as volumes for persistence.
 
----
 
-## Documentation
-
-| Doc | Description |
-|-----|-------------|
-| [`01_eda.md`](docs/01_eda.md) | EDA notebook: cell-by-cell walkthrough with audio fundamentals explained |
-| [`02_baseline.md`](docs/02_baseline.md) | Baseline training: model architectures, training loop, results analysis |
-| [`03_preprocessing.md`](docs/03_preprocessing.md) | Preprocessing notebook: bandpass, normalisation, augmentation validation |
-| [`04_ablation.md`](docs/04_ablation.md) | Ablation study: 10 experiments, per-class analysis, error analysis |
-| [`05_streamlit_app.md`](docs/05_streamlit_app.md) | Deployment: inference engine, Streamlit UI, sliding window detection |
-| [`06_software.md`](docs/06_software.md) | Software architecture: design patterns, dependency graph, decisions |
-| [`07_tests.md`](docs/07_tests.md) | Test suite: fixtures, mocking, parametrize, CI pipeline |
-
----
-
-## Dependencies
-
-```bash
-# Production
-uv sync
-
-# Development (includes pytest, pytest-cov, black)
-uv sync --group dev
-```
-
-### Key Libraries
-
-| Library | Purpose |
-|---------|---------|
-| `torch` / `torchvision` | Model training and inference |
-| `librosa` | Audio loading, resampling, mel spectrograms |
-| `scipy` | Butterworth bandpass filter |
-| `scikit-learn` | Stratified train/val/test splitting |
-| `torchmetrics` | F1, precision, recall, confusion matrix |
-| `streamlit` | Web application framework |
-| `plotly` | Interactive waveform visualisation |
-| `pytest` | Unit testing framework |
-| `black` | Code formatting |
